@@ -26,4 +26,4 @@ GreaseMonkey and TamperMonkey will occasionally check for new versions of these 
 
 ## Feedback and suggestions
 
-Any issues found can be reported at the [GitHub project page](https://github.com/Glodenox/wme-streetviewavailability/issues).
+Any issues found can be reported at the [GitHub project page](https://github.com/Glodenox/wme-streetviewavailability/issues) or on the [Waze script forum thread](https://www.waze.com/forum/viewtopic.php?f=819&t=180148).
