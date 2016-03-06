@@ -1,9 +1,11 @@
-# wme-streetviewavailability
-WME userscript that shows the availability of Street View imagery. Still very much in beta, but the basics are there.
+# WME Street View Availability
+WME userscript that shows the availability of Street View imagery. This was quickly thrown together and is still very much in beta, but the basics are there.
 
 ## How to use
 
 ![Open Maps layers](https://tomputtemans.com/waze-scripts/images/StreetView-drag.jpg)
+
+Whenever you drag the Street View marker in the map editor, blue lines indicating where Street View imagery is available will appear.
 
 ## Installation instructions
 
