@@ -1,5 +1,5 @@
 # WME Street View Availability
-WME userscript that shows the availability of Street View imagery. This was quickly thrown together and is still very much in beta, but the basics are there.
+WME userscript that shows where you can expect to find Street View imagery. The information provided is quite basic, but this is all that is readily available to show.
 
 ## How to use
 
