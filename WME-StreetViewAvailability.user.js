@@ -131,7 +131,7 @@
 
     // Remove old LocalStorage entry
     if (localStorage.getItem('WMEStreetViewWidth')) {
-      localStorage.removeItem('WMEStreetViewWidth')
+      localStorage.removeItem('WMEStreetViewWidth');
     }
   }
   function isHidden(el) {
