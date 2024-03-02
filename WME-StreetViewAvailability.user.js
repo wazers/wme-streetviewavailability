@@ -128,11 +128,6 @@
         ignoreStreetViewExit = false;
       }
     });
-
-    // Remove old LocalStorage entry
-    if (localStorage.getItem('WMEStreetViewWidth')) {
-      localStorage.removeItem('WMEStreetViewWidth');
-    }
   }
   function isHidden(el) {
     return el.style.display == 'none' || el.classList.contains('hide');
