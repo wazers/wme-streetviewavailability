@@ -18,26 +18,23 @@
     'https://mts3.google.com/mapslt'
   ];
 
-  function init(e) {
-    if (e && e.user === null) {
-      return;
-    }
-    if (typeof I18n === 'undefined') {
-      setTimeout(init, 300);
-      return;
-    }
+  window.SDK_INITIALIZED.then(init);
+
+  function init() {
     if (document.getElementById('layer-switcher') === null && document.getElementById('layer-switcher-group_display') === null) {
+      console.log('layer-switcher or layer-switcher-group not found');
       setTimeout(init, 200);
       return;
     }
     var streetViewControl = document.querySelector('.street-view-control');
     var buttons = document.getElementById('overlay-buttons-region');
     if (typeof streetViewControl === 'undefined' || typeof buttons === 'undefined') {
-      setTimeout(init, 400);
       console.log('Street view control unavailable, retrying in 400ms');
+      setTimeout(init, 400);
     }
     if (typeof W === 'undefined' ||
         typeof W.loginManager === 'undefined') {
+      console.log('W object not available');
       setTimeout(init, 100);
       return;
     }
@@ -57,16 +54,26 @@
 
     // Add the map layer, hidden by default
     I18n.translations[I18n.currentLocale()].layers.name.street_view_availability = 'Street View Availability';
-    var streetViewLayer = new OL.Layer.XYZ('Street View', tilelayerServers[Math.floor(Math.random() * tilelayerServers.length)] + '?lyrs=svv&x=${x}&y=${y}&z=${z}&w=256&h=256&style=40', {
-      isBaseLayer: false,
-      uniqueName: 'street_view_availability',
-      tileSize: new OL.Size(256, 256),
-      transitionEffect: 'resize',
-      displayInLayerSwitcher: true,
-      opacity: localStorage.WME_StreetViewAvailability ? JSON.parse(localStorage.WME_StreetViewAvailability).opacity : 1,
-      visibility: false
+    const wmeSDK = getWmeSdk({ scriptId: "street-view-availability", scriptName: "Street View Availability"});
+    wmeSDK.Map.addTileLayer({
+      layerName: 'Street View',
+      layerOptions: {
+        tileHeight: 256,
+        tileWidth: 256,
+        url: {
+          fileName: 'mapslt?lyrs=svv&x=${x}&y=${y}&z=${z}&w=256&h=256&style=40',
+          servers: ['https://mts0.google.com', 'https://mts1.google.com', 'https://mts2.google.com', 'https://mts3.google.com' ]
+        }
+      }
     });
-    W.map.addLayer(streetViewLayer);
+    const layer = {
+      setVisibility: (visibility) => wmeSDK.Map.setLayerVisibility({
+        layerName: 'Street View',
+        visibility: visibility
+      }),
+      isLayerVisible: () => wmeSDK.Map.isLayerVisible({ layerName: 'Street View' })
+    }
+    layer.setVisibility(false);
 
     // Add layer entry in the new layer drawer
     var displayGroupToggle = document.getElementById('layer-switcher-group_display');
@@ -82,12 +89,12 @@
       checkbox.type = 'checkbox';
       checkbox.className = 'hydrated';
       checkbox.textContent = 'Street View';
-      checkbox.addEventListener('click', e => streetViewLayer.setVisibility(e.target.checked));
+      checkbox.addEventListener('click', e => layer.setVisibility(e.target.checked));
       toggler.appendChild(checkbox);
       togglesList.appendChild(toggler);
       displayGroupToggle.addEventListener('click', function() {
         checkbox.disabled = !displayGroupToggle.checked;
-        streetViewLayer.setVisibility(displayGroupToggle.checked && checkbox.checked);
+        layer.setVisibility(displayGroupToggle.checked && checkbox.checked);
       });
     }
 
@@ -95,12 +102,13 @@
     I18n.translations[I18n.currentLocale()].keyboard_shortcuts.groups.layers.members.toggleStreetViewAvailability = 'Toggle street view availability';
     W.accelerators.addAction('toggleStreetViewAvailability', { group: 'layers' });
     W.accelerators.events.register('toggleStreetViewAvailability', this, function() {
-      streetViewLayer.setVisibility(!streetViewLayer.getVisibility());
-      checkbox.checked = streetViewLayer.getVisibility();
+      layer.setVisibility(!layer.isLayerVisible());
+      checkbox.checked = layer.isLayerVisible();
     });
     W.accelerators._registerShortcuts({ 'S+t': 'toggleStreetViewAvailability' });
 
     // Add an observer to activate the script whenever the street view marker gets dragged around
+    // TODO: maybe simplify by both observering the pin and the class street-view-mode in #map?
     var controlObserver = new MutationObserver(function(mutationRecords) {
       try {
         var activeButton = mutationRecords.find(record => record.target.classList.contains('overlay-button-active'));
@@ -108,11 +116,11 @@
           if (pinWasHidden == true && displayGroupToggle.checked) {
             pinWasHidden = activeButton == null;
             enteringStreetView = true;
-            streetViewLayer.setVisibility(true);
+            layer.setVisibility(true);
             enteringStreetView = false;
           } else if (pinWasHidden == false && !ignoreStreetViewExit) {
             pinWasHidden = activeButton == null;
-            streetViewLayer.setVisibility(false);
+            layer.setVisibility(false);
           }
         }
       } catch (error) {
@@ -131,14 +139,14 @@
     buttonsObserver.observe(buttons, { childList: true });
 
     // Deal with changes to the layer visibility
-    streetViewLayer.events.register('visibilitychanged', null, function() {
-      if (!enteringStreetView && streetViewLayer.getVisibility()) {
+    /*streetViewLayer.events.register('visibilitychanged', null, function() {
+      if (!enteringStreetView && layer.isLayerVisible()) {
         ignoreStreetViewExit = true;
       }
-      if (!streetViewLayer.getVisibility()) {
+      if (!layer.isLayerVisible()) {
         ignoreStreetViewExit = false;
       }
-    });
+    });*/
   }
   init();
 })();
