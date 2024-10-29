@@ -8,55 +8,25 @@
 // @grant       none
 // ==/UserScript==
 
-/* global W, I18n, OL, google */
+var wmeSDK;
+window.SDK_INITIALIZED.then(() => {
+  wmeSDK = getWmeSdk({ scriptId: "street-view-availability", scriptName: "Street View Availability"});
+  wmeSDK.Events.once({ eventName: "wme-ready" }).then(init);
+});
 
-(function() {
-  var tilelayerServers = [
-    'https://mts0.google.com/mapslt',
-    'https://mts1.google.com/mapslt',
-    'https://mts2.google.com/mapslt',
-    'https://mts3.google.com/mapslt'
-  ];
+function init() {
+  var enteringStreetView = false, // Set to true when the marker is being dragged to the map
+      ignoreStreetViewExit = false, // Set to true to indicate that the street view availability was set to visible manually and should not be reverted
+      pinWasHidden = true; // Contains previous pin display state, used to detected changes
 
-  window.SDK_INITIALIZED.then(init);
+  const streetViewControl = document.querySelector('.street-view-control');
+  const buttons = document.getElementById('overlay-buttons-region');
 
-  function init() {
-    if (document.getElementById('layer-switcher') === null && document.getElementById('layer-switcher-group_display') === null) {
-      console.log('layer-switcher or layer-switcher-group not found');
-      setTimeout(init, 200);
-      return;
-    }
-    var streetViewControl = document.querySelector('.street-view-control');
-    var buttons = document.getElementById('overlay-buttons-region');
-    if (typeof streetViewControl === 'undefined' || typeof buttons === 'undefined') {
-      console.log('Street view control unavailable, retrying in 400ms');
-      setTimeout(init, 400);
-    }
-    if (typeof W === 'undefined' ||
-        typeof W.loginManager === 'undefined') {
-      console.log('W object not available');
-      setTimeout(init, 100);
-      return;
-    }
-    if (!W.loginManager.user) {
-      W.loginManager.events.register("login", null, init);
-      if (!W.loginManager.user) {
-        return;
-      }
-    }
-
-    var enteringStreetView = false, // Set to true when the marker is being dragged to the map
-        ignoreStreetViewExit = false, // Set to true to indicate that the street view availability was set to visible manually and should not be reverted
-        pinWasHidden = true; // Contains previous pin display state, used to detected changes
-
-    // Change the opacity with the following bookmarklet:
-    // javascript:localStorage.WME_StreetViewAvailability=JSON.stringify({opacity:prompt('Give a percentage between 0 and 100',100)/100});W.map.getLayersByName('Street View Availability')[0].setOpacity(JSON.parse(localStorage.WME_StreetViewAvailability).opacity);
-
-    // Add the map layer, hidden by default
-    I18n.translations[I18n.currentLocale()].layers.name.street_view_availability = 'Street View Availability';
-    const wmeSDK = getWmeSdk({ scriptId: "street-view-availability", scriptName: "Street View Availability"});
+  // Layer object to encapsulate layer logic
+  const layer = function() {
+    const layerName = 'Street View';
     wmeSDK.Map.addTileLayer({
-      layerName: 'Street View',
+      layerName: layerName,
       layerOptions: {
         tileHeight: 256,
         tileWidth: 256,
@@ -66,87 +36,91 @@
         }
       }
     });
-    const layer = {
+    wmeSDK.Events.trackLayerEvents({ layerName: layerName });
+    wmeSDK.Events.on({
+      eventName: 'wme-layer-visibility-changed',
+      eventHandler: () => {
+        if (!enteringStreetView && layer.isLayerVisible()) {
+          ignoreStreetViewExit = true;
+        }
+        if (!layer.isLayerVisible()) {
+          ignoreStreetViewExit = false;
+        }
+      }
+    });
+
+    return {
       setVisibility: (visibility) => wmeSDK.Map.setLayerVisibility({
-        layerName: 'Street View',
+        layerName: layerName,
         visibility: visibility
       }),
-      isLayerVisible: () => wmeSDK.Map.isLayerVisible({ layerName: 'Street View' })
-    }
-    layer.setVisibility(false);
+      isLayerVisible: () => wmeSDK.Map.isLayerVisible({ layerName: layerName })
+    };
+  }();
+  layer.setVisibility(false);
 
-    // Add layer entry in the new layer drawer
-    var displayGroupToggle = document.getElementById('layer-switcher-group_display');
-    if (displayGroupToggle != null) {
-      var displayGroup = displayGroupToggle.parentNode;
-      while (displayGroup != null && displayGroup.className != 'group') {
-        displayGroup = displayGroup.parentNode;
-      }
-      var togglesList = displayGroup.querySelector('.collapsible-GROUP_DISPLAY');
-      var toggler = document.createElement('li');
-      var checkbox = document.createElement('wz-checkbox');
-      checkbox.id = 'layer-switcher-item_street_view';
-      checkbox.type = 'checkbox';
-      checkbox.className = 'hydrated';
-      checkbox.textContent = 'Street View';
-      checkbox.addEventListener('click', e => layer.setVisibility(e.target.checked));
-      toggler.appendChild(checkbox);
-      togglesList.appendChild(toggler);
-      displayGroupToggle.addEventListener('click', function() {
-        checkbox.disabled = !displayGroupToggle.checked;
-        layer.setVisibility(displayGroupToggle.checked && checkbox.checked);
-      });
+  // Add layer entry in the new layer drawer
+  var displayGroupToggle = document.getElementById('layer-switcher-group_display');
+  if (displayGroupToggle != null) {
+    var displayGroup = displayGroupToggle.parentNode;
+    while (displayGroup != null && displayGroup.className != 'group') {
+      displayGroup = displayGroup.parentNode;
     }
+    var togglesList = displayGroup.querySelector('.collapsible-GROUP_DISPLAY');
+    var toggler = document.createElement('li');
+    var checkbox = document.createElement('wz-checkbox');
+    checkbox.id = 'layer-switcher-item_street_view';
+    checkbox.type = 'checkbox';
+    checkbox.className = 'hydrated';
+    checkbox.textContent = 'Street View';
+    checkbox.addEventListener('click', e => layer.setVisibility(e.target.checked));
+    toggler.appendChild(checkbox);
+    togglesList.appendChild(toggler);
+    displayGroupToggle.addEventListener('click', function() {
+      checkbox.disabled = !displayGroupToggle.checked;
+      layer.setVisibility(displayGroupToggle.checked && checkbox.checked);
+    });
+  }
 
-    // Create keyboard shortcut to toggle the imagery layer (Shift+T)
-    I18n.translations[I18n.currentLocale()].keyboard_shortcuts.groups.layers.members.toggleStreetViewAvailability = 'Toggle street view availability';
-    W.accelerators.addAction('toggleStreetViewAvailability', { group: 'layers' });
-    W.accelerators.events.register('toggleStreetViewAvailability', this, function() {
+  // Create keyboard shortcut to toggle the imagery layer (Shift+T)
+  wmeSDK.Shortcuts.createShortcut({
+    callback: () => {
       layer.setVisibility(!layer.isLayerVisible());
       checkbox.checked = layer.isLayerVisible();
-    });
-    W.accelerators._registerShortcuts({ 'S+t': 'toggleStreetViewAvailability' });
+    },
+    description: 'Toggle street view availability',
+    shortcutId: 'toggleStreetViewAvailability',
+    shortcutKeys: 'S+t'
+  });
 
-    // Add an observer to activate the script whenever the street view marker gets dragged around
-    // TODO: maybe simplify by both observering the pin and the class street-view-mode in #map?
-    var controlObserver = new MutationObserver(function(mutationRecords) {
-      try {
-        var activeButton = mutationRecords.find(record => record.target.classList.contains('overlay-button-active'));
-        if ((activeButton == null) != pinWasHidden) {
-          if (pinWasHidden == true && displayGroupToggle.checked) {
-            pinWasHidden = activeButton == null;
-            enteringStreetView = true;
-            layer.setVisibility(true);
-            enteringStreetView = false;
-          } else if (pinWasHidden == false && !ignoreStreetViewExit) {
-            pinWasHidden = activeButton == null;
-            layer.setVisibility(false);
-          }
+  // Add an observer to activate the script whenever the street view marker gets dragged around
+  // TODO: maybe simplify by both observering the pin and the class street-view-mode in #map?
+  var controlObserver = new MutationObserver(function(mutationRecords) {
+    try {
+      var activeButton = mutationRecords.find(record => record.target.classList.contains('overlay-button-active'));
+      if ((activeButton == null) != pinWasHidden) {
+        if (pinWasHidden == true && displayGroupToggle.checked) {
+          pinWasHidden = activeButton == null;
+          enteringStreetView = true;
+          layer.setVisibility(true);
+          enteringStreetView = false;
+        } else if (pinWasHidden == false && !ignoreStreetViewExit) {
+          pinWasHidden = activeButton == null;
+          layer.setVisibility(false);
         }
-      } catch (error) {
-        console.error('Error caught while observing pin mutation', error);
+      }
+    } catch (error) {
+      console.error('Error caught while observing pin mutation', error);
+    }
+  });
+  controlObserver.observe(streetViewControl, { attributes: true, attributeFilter: ['class'] });
+  var buttonsObserver = new MutationObserver(function(mutationRecords) {
+    mutationRecords.forEach(record => {
+      var streetViewControl = record.target.querySelector('.street-view-control');
+      if (streetViewControl) {
+        controlObserver.observe(streetViewControl, { attributes: true, attributeFilter: ['class'] });
       }
     });
-    controlObserver.observe(streetViewControl, { attributes: true, attributeFilter: ['class'] });
-    var buttonsObserver = new MutationObserver(function(mutationRecords) {
-      mutationRecords.forEach(record => {
-        var streetViewControl = record.target.querySelector('.street-view-control');
-        if (streetViewControl) {
-          controlObserver.observe(streetViewControl, { attributes: true, attributeFilter: ['class'] });
-        }
-      });
-    });
-    buttonsObserver.observe(buttons, { childList: true });
-
-    // Deal with changes to the layer visibility
-    /*streetViewLayer.events.register('visibilitychanged', null, function() {
-      if (!enteringStreetView && layer.isLayerVisible()) {
-        ignoreStreetViewExit = true;
-      }
-      if (!layer.isLayerVisible()) {
-        ignoreStreetViewExit = false;
-      }
-    });*/
-  }
-  init();
-})();
+  });
+  buttonsObserver.observe(buttons, { childList: true });
+}
